@@ -1,0 +1,20 @@
+[package]
+name = "shield-scanner-report"
+description = "Self-contained HTML reports for Shield scans"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+maud.workspace = true
+shield-scanner-core = { path = "../scanner-core" }
+url.workspace = true
+
+[dev-dependencies]
+chrono.workspace = true

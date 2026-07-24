@@ -1,0 +1,39 @@
+[workspace]
+members = [
+    "crates/scanner-cli",
+    "crates/scanner-core",
+    "crates/scanner-report",
+]
+default-members = ["crates/scanner-cli"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["JDRV-space"]
+repository = "https://github.com/JDRV-space/shieldyoursite"
+rust-version = "1.88"
+
+[workspace.dependencies]
+assert_cmd = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+clap = { version = "4", features = ["derive"] }
+directories = "6"
+maud = "0.27"
+predicates = "3"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots"] }
+scraper = "0.27"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "time"] }
+url = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
