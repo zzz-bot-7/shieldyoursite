@@ -14,10 +14,11 @@ Shield reports a project score, not a compliance certification or a clone of ano
 | Permissions-Policy | 10 |
 | X-XSS-Protection lifecycle | 5 |
 
-Pass receives full weight. Warning receives half weight. Fail receives zero.
+Pass receives full weight. Warning receives exactly half weight, including half-points. Fail receives zero. The final normalized score is rounded to the nearest whole number after all controls are summed.
 Controls that do not apply receive no weight, and the score is normalized over
-the remaining controls. HSTS is not applicable to IP-literal targets because
-RFC 6797 defines HSTS hosts by domain name.
+the remaining controls. On HTTPS responses, HSTS is not applicable to IP-literal
+targets because RFC 6797 defines HSTS hosts by domain name. Plain HTTP still
+fails the transport check.
 
 | Score | Grade |
 |---:|---|
@@ -52,6 +53,15 @@ The following are reported but not graded because correct deployment depends on 
   allowlist.
 - Missing X-XSS-Protection passes. Nonzero values warn because the header is deprecated.
 - Resource detection parses URL hosts. Text appearing in a query or path is not treated as a provider match.
+
+## Scan Limits
+
+- A scan sends one GET request, follows at most five public-network-only redirects, and evaluates only the final successful response.
+- Requests have a 5-second connection timeout and a 15-second total timeout.
+- HTML body analysis stops at 2 MiB. Security-header evaluation still uses the final response headers.
+- Platform detection uses fixed header signatures. Its confidence is heuristic, not proof of the hosting platform.
+- Resource detection checks selected HTML element URLs against a fixed provider catalog. It does not observe JavaScript execution, CSS loads, browser network activity, or unlisted providers.
+- False positives and false negatives are expected at these heuristic boundaries. Confirm material findings against the target configuration and browser behavior.
 
 ## Sources
 

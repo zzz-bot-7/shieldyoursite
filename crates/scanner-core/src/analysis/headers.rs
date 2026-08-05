@@ -242,6 +242,17 @@ fn evaluate_frame_protection(headers: &HeaderMap) -> HeaderAssessment {
         if let Some(frame_ancestors) =
             csp_directive(&csp_value.to_ascii_lowercase(), "frame-ancestors")
         {
+            if !frame_ancestors_is_valid(frame_ancestors) {
+                return assessment(
+                    "frame-protection",
+                    "Frame protection",
+                    RuleStatus::Fail,
+                    Some(format!("frame-ancestors {frame_ancestors}")),
+                    "CSP frame-ancestors is invalid.",
+                    Some("Use 'none', 'self', or valid scheme and host sources."),
+                    WEIGHT,
+                );
+            }
             let broad_source = frame_ancestors.split_whitespace().any(|source| {
                 matches!(
                     source,
@@ -536,11 +547,7 @@ fn assessment(
     recommendation: Option<&str>,
     weight: u8,
 ) -> HeaderAssessment {
-    let earned = match status {
-        RuleStatus::Pass => weight,
-        RuleStatus::Warning => weight / 2,
-        RuleStatus::Fail | RuleStatus::Info => 0,
-    };
+    let earned = f32::from(status.earned_half_points(weight)) / 2.0;
 
     HeaderAssessment {
         id: id.to_owned(),
@@ -581,6 +588,79 @@ fn csp_directive<'a>(policy: &'a str, name: &str) -> Option<&'a str> {
             .eq_ignore_ascii_case(name)
             .then_some(sources.trim())
     })
+}
+
+fn frame_ancestors_is_valid(value: &str) -> bool {
+    let sources: Vec<&str> = value.split_whitespace().collect();
+    if sources.is_empty() {
+        return false;
+    }
+    if sources.contains(&"'none'") {
+        return sources.len() == 1;
+    }
+
+    sources.iter().all(|source| {
+        *source == "'self'" || scheme_source_is_valid(source) || host_source_is_valid(source)
+    })
+}
+
+fn scheme_source_is_valid(source: &str) -> bool {
+    source
+        .strip_suffix(':')
+        .is_some_and(|scheme| !scheme.contains('/') && scheme_is_valid(scheme))
+}
+
+fn host_source_is_valid(source: &str) -> bool {
+    let (scheme, remainder) = source
+        .split_once("://")
+        .map_or((None, source), |(scheme, remainder)| {
+            (Some(scheme), remainder)
+        });
+    if scheme.is_some_and(|scheme| !scheme_is_valid(scheme)) {
+        return false;
+    }
+
+    let (authority, path) = remainder
+        .split_once('/')
+        .map_or((remainder, None), |(authority, path)| {
+            (authority, Some(path))
+        });
+    if path.is_some_and(|path| path.contains([';', ',', '?', '#'])) {
+        return false;
+    }
+
+    let (host, port) = authority
+        .rsplit_once(':')
+        .map_or((authority, None), |(host, port)| (host, Some(port)));
+    port.is_none_or(|port| {
+        port == "*"
+            || (!port.is_empty() && port.chars().all(|character| character.is_ascii_digit()))
+    }) && host_part_is_valid(host)
+}
+
+fn scheme_is_valid(scheme: &str) -> bool {
+    let mut characters = scheme.chars();
+    characters
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic())
+        && characters.all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
+        })
+}
+
+fn host_part_is_valid(host: &str) -> bool {
+    if host == "*" {
+        return true;
+    }
+    let host = host.strip_prefix("*.").unwrap_or(host);
+    let host = host.strip_suffix('.').unwrap_or(host);
+    !host.is_empty()
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && label
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric() || character == '-')
+        })
 }
 
 #[cfg(test)]
@@ -629,8 +709,8 @@ mod tests {
         insert(&mut headers, "permissions-policy", "geolocation=()");
 
         let assessments = evaluate_headers(&headers, &https_url());
-        let score: u8 = assessments.iter().map(|item| item.earned).sum();
-        assert_eq!(score, 100);
+        let score: f32 = assessments.iter().map(|item| item.earned).sum();
+        assert!((score - 100.0).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -747,6 +827,54 @@ mod tests {
     }
 
     #[test]
+    fn invalid_frame_ancestor_fails() {
+        for policy in [
+            "default-src 'self'; frame-ancestors",
+            "default-src 'self'; frame-ancestors 'unsafe-inline'",
+            "default-src 'self'; frame-ancestors 'none' https://example.com",
+        ] {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                "content-security-policy",
+                HeaderValue::from_str(policy).expect("test policy must be a header value"),
+            );
+
+            let assessments = evaluate_headers(&headers, &https_url());
+            assert_eq!(
+                status(&assessments, "frame-protection").status,
+                RuleStatus::Fail,
+                "{policy} should fail"
+            );
+        }
+    }
+
+    #[test]
+    fn frame_ancestor_syntax_accepts_only_ancestor_sources() {
+        for value in [
+            "'none'",
+            "'self'",
+            "https:",
+            "example.com",
+            "*.example.com",
+            "https://example.com:443/path",
+        ] {
+            assert!(frame_ancestors_is_valid(value), "{value} should be valid");
+        }
+        for value in [
+            "",
+            "'unsafe-inline'",
+            "'none' 'self'",
+            "https://example.com:",
+            "example_com",
+        ] {
+            assert!(
+                !frame_ancestors_is_valid(value),
+                "{value} should be invalid"
+            );
+        }
+    }
+
+    #[test]
     fn any_unrestricted_permissions_feature_warns() {
         let mut headers = HeaderMap::new();
         insert(
@@ -779,9 +907,8 @@ mod tests {
         let mut headers = HeaderMap::new();
         insert(&mut headers, "x-xss-protection", "1; mode=block");
         let assessments = evaluate_headers(&headers, &https_url());
-        assert_eq!(
-            status(&assessments, "xss-protection").status,
-            RuleStatus::Warning
-        );
+        let xss = status(&assessments, "xss-protection");
+        assert_eq!(xss.status, RuleStatus::Warning);
+        assert!((xss.earned - 2.5).abs() < f32::EPSILON);
     }
 }

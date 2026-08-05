@@ -45,7 +45,7 @@ impl Scanner {
         let resources = detect_resources(&page.body, &page.final_url);
 
         Ok(ScanResult {
-            schema_version: 1,
+            schema_version: 2,
             requested_url: requested_url.to_string(),
             final_url: page.final_url.to_string(),
             scanned_at: Utc::now(),
@@ -67,20 +67,20 @@ impl Scanner {
 }
 
 fn normalized_score(headers: &[crate::model::HeaderAssessment]) -> u8 {
-    let earned = headers
+    let earned_half_points = headers
         .iter()
-        .map(|assessment| u16::from(assessment.earned))
+        .map(|assessment| assessment.status.earned_half_points(assessment.weight))
         .sum::<u16>();
-    let available = headers
+    let available_half_points = headers
         .iter()
-        .map(|assessment| u16::from(assessment.weight))
+        .map(|assessment| u16::from(assessment.weight) * 2)
         .sum::<u16>();
 
-    if available == 0 {
+    if available_half_points == 0 {
         return 0;
     }
 
-    u8::try_from(((earned * 100) + (available / 2)) / available)
+    u8::try_from(((earned_half_points * 100) + (available_half_points / 2)) / available_half_points)
         .unwrap_or(100)
         .min(100)
 }
@@ -91,7 +91,7 @@ mod tests {
 
     use super::normalized_score;
 
-    fn assessment(status: RuleStatus, weight: u8, earned: u8) -> HeaderAssessment {
+    fn assessment(status: RuleStatus, weight: u8, earned: f32) -> HeaderAssessment {
         HeaderAssessment {
             id: String::new(),
             header: String::new(),
@@ -107,11 +107,22 @@ mod tests {
     #[test]
     fn score_normalizes_when_a_control_is_not_applicable() {
         let assessments = [
-            assessment(RuleStatus::Info, 0, 0),
-            assessment(RuleStatus::Pass, 40, 40),
-            assessment(RuleStatus::Warning, 40, 20),
+            assessment(RuleStatus::Info, 0, 0.0),
+            assessment(RuleStatus::Pass, 40, 40.0),
+            assessment(RuleStatus::Warning, 40, 20.0),
         ];
 
         assert_eq!(normalized_score(&assessments), 75);
+    }
+
+    #[test]
+    fn score_keeps_half_points_until_final_rounding() {
+        let assessments = [
+            assessment(RuleStatus::Pass, 80, 80.0),
+            assessment(RuleStatus::Warning, 15, 7.5),
+            assessment(RuleStatus::Warning, 5, 2.5),
+        ];
+
+        assert_eq!(normalized_score(&assessments), 90);
     }
 }

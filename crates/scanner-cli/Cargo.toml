@@ -19,8 +19,8 @@ workspace = true
 clap.workspace = true
 directories.workspace = true
 serde_json.workspace = true
-shield-scanner-core = { path = "../scanner-core" }
-shield-scanner-report = { path = "../scanner-report" }
+shield-scanner-core = { version = "0.1.0", path = "../scanner-core" }
+shield-scanner-report = { version = "0.1.0", path = "../scanner-report" }
 thiserror.workspace = true
 tokio.workspace = true
 

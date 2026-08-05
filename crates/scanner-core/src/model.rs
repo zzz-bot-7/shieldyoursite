@@ -64,7 +64,17 @@ impl fmt::Display for RuleStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+impl RuleStatus {
+    pub(crate) const fn earned_half_points(self, weight: u8) -> u16 {
+        match self {
+            Self::Pass => weight as u16 * 2,
+            Self::Warning => weight as u16,
+            Self::Fail | Self::Info => 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HeaderAssessment {
     pub id: String,
     pub header: String,
@@ -73,7 +83,7 @@ pub struct HeaderAssessment {
     pub summary: String,
     pub recommendation: Option<String>,
     pub weight: u8,
-    pub earned: u8,
+    pub earned: f32,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -180,7 +190,7 @@ pub struct ResponseMetadata {
     pub body_truncated: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScanResult {
     pub schema_version: u16,
     pub requested_url: String,

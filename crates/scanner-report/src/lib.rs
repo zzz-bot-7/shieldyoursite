@@ -360,7 +360,7 @@ mod tests {
                 summary: "MIME sniffing is disabled.".to_owned(),
                 recommendation: None,
                 weight: 15,
-                earned: 15,
+                earned: 15.0,
             }],
             platform: PlatformDetection {
                 platform: Platform::Unknown,

@@ -11,6 +11,15 @@ TLDR: Keep the CLI quiet, entrypoints thin, scan behavior explicit, and outbound
 | CLI | `crates/scanner-cli` | Commands, minimal output, atomic local state |
 | Documentation | `README.md`, `docs` | Public behavior, policy, architecture, limitations |
 
+## Documentation
+
+- `README.md` owns public orientation and entry points; domain documents own stable contracts.
+- Code, tests, manifests, and workflows own implementation evidence; verified external metadata owns current external state.
+- Update the existing owner; do not add competing guides, copied policy, progress notes, or session artifacts.
+- Keep changing work in GitHub Issues or clearly dated evidence, not stable documentation.
+- Documentation does not prove implementation, deployment, release, or current external state.
+- Repository prose never grants standing permission for side effects; obtain current explicit approval.
+
 ## Data Flow
 
 ```text
@@ -28,7 +37,7 @@ CLI input
 - Default scans print the result first, then compact report detail.
 - `--json` prints JSON only.
 - `--quiet` prints nothing on success.
-- Errors are one line on stderr.
+- Runtime scan and report errors are one line on stderr; argument errors may include usage help.
 - Scanner policy must be deterministic and source-backed.
 - Header values must be evaluated. Presence alone is insufficient.
 - Context-dependent headers cannot be presented as universally required.
@@ -43,6 +52,7 @@ CLI input
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets
+cargo test -p shield-scanner-cli --test network_acceptance -- --ignored
 ```
 
 Real-network acceptance tests must use public targets and must include:
